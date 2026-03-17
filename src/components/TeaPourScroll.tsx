@@ -10,6 +10,7 @@ function getFramePath(index: number): string {
 }
 
 export default function TeaPourScroll() {
+  const bgCanvasRef = useRef<HTMLCanvasElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const imagesRef = useRef<HTMLImageElement[]>([]);
@@ -56,22 +57,42 @@ export default function TeaPourScroll() {
     const img = imagesRef.current[frameIndex];
     if (!img || !img.complete || !img.naturalWidth) return;
 
-    // Set canvas size to match container
+    // Set canvas dimensions
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
+    if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+    }
 
-    // Clear and draw
+    // BG Canvas dimensions
+    const bgCanvas = bgCanvasRef.current;
+    let bgCtx: CanvasRenderingContext2D | null = null;
+    let bgRect: DOMRect | null = null;
+    
+    if (bgCanvas) {
+      bgCtx = bgCanvas.getContext("2d");
+      bgRect = bgCanvas.getBoundingClientRect();
+      if (bgCtx && bgRect) {
+        if (bgCanvas.width !== bgRect.width * dpr || bgCanvas.height !== bgRect.height * dpr) {
+          bgCanvas.width = bgRect.width * dpr;
+          bgCanvas.height = bgRect.height * dpr;
+          bgCtx.scale(dpr, dpr);
+        }
+        bgCtx.clearRect(0, 0, bgRect.width, bgRect.height);
+      }
+    }
+
+    // Clear FG canvas
     ctx.clearRect(0, 0, rect.width, rect.height);
 
-    // Calculate contain dimensions to prevent cropping on mobile (object-fit: contain)
     const imgAspect = img.naturalWidth / img.naturalHeight;
     const canvasAspect = rect.width / rect.height;
 
     let drawWidth: number, drawHeight: number, offsetX: number, offsetY: number;
 
+    // Draw Foreground (Contain)
     if (imgAspect > canvasAspect) {
       // Image is wider than canvas (e.g., mobile portrait) - fit to width
       drawWidth = rect.width;
@@ -85,8 +106,28 @@ export default function TeaPourScroll() {
       offsetX = (rect.width - drawWidth) / 2;
       offsetY = 0;
     }
-
     ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+
+    // Draw Background (Cover)
+    if (bgCtx && bgRect) {
+      const bgCanvasAspect = bgRect.width / bgRect.height;
+      let bgDrawWidth: number, bgDrawHeight: number, bgOffsetX: number, bgOffsetY: number;
+
+      if (imgAspect > bgCanvasAspect) {
+        // Image wider than canvas - cover height
+        bgDrawHeight = bgRect.height;
+        bgDrawWidth = bgDrawHeight * imgAspect;
+        bgOffsetX = (bgRect.width - bgDrawWidth) / 2;
+        bgOffsetY = 0;
+      } else {
+        // Image taller than canvas - cover width
+        bgDrawWidth = bgRect.width;
+        bgDrawHeight = bgDrawWidth / imgAspect;
+        bgOffsetX = 0;
+        bgOffsetY = (bgRect.height - bgDrawHeight) / 2;
+      }
+      bgCtx.drawImage(img, bgOffsetX, bgOffsetY, bgDrawWidth, bgDrawHeight);
+    }
   }, []);
 
   // Scroll handler
@@ -183,16 +224,31 @@ export default function TeaPourScroll() {
         </div>
       )}
 
-      {/* Sticky Canvas */}
-      <div className="sticky top-0 flex h-screen w-full items-center justify-center overflow-hidden">
+      {/* Sticky Canvas Container */}
+      <div className="sticky top-0 flex h-screen w-full items-center justify-center overflow-hidden bg-[#e0d8d0]">
+        
+        {/* Background Ambient Canvas (Blurred & Scaled) */}
         <canvas
-          ref={canvasRef}
-          className="h-full w-full"
+          ref={bgCanvasRef}
+          className="absolute inset-0 h-full w-full opacity-80 blur-3xl scale-110 saturate-150 transition-opacity duration-300"
           style={{
             maxWidth: "100vw",
             maxHeight: "100vh",
           }}
         />
+
+        {/* Foreground Canvas (Sharp & Contained) */}
+        <canvas
+          ref={canvasRef}
+          className="relative z-10 h-full w-full drop-shadow-2xl"
+          style={{
+            maxWidth: "100vw",
+            maxHeight: "100vh",
+          }}
+        />
+
+        {/* Top/Bottom Gradient Overlays to smoothly blend the edges into sections */}
+        <div className="absolute inset-0 z-20 pointer-events-none bg-[linear-gradient(to_bottom,var(--color-cream)_0%,transparent_15%,transparent_85%,var(--color-cream)_100%)]" />
       </div>
     </div>
   );

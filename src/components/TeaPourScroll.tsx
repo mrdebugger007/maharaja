@@ -66,22 +66,24 @@ export default function TeaPourScroll() {
     // Clear and draw
     ctx.clearRect(0, 0, rect.width, rect.height);
 
-    // Calculate cover dimensions
+    // Calculate contain dimensions to prevent cropping on mobile (object-fit: contain)
     const imgAspect = img.naturalWidth / img.naturalHeight;
     const canvasAspect = rect.width / rect.height;
 
     let drawWidth: number, drawHeight: number, offsetX: number, offsetY: number;
 
     if (imgAspect > canvasAspect) {
-      drawHeight = rect.height;
-      drawWidth = drawHeight * imgAspect;
-      offsetX = (rect.width - drawWidth) / 2;
-      offsetY = 0;
-    } else {
+      // Image is wider than canvas (e.g., mobile portrait) - fit to width
       drawWidth = rect.width;
       drawHeight = drawWidth / imgAspect;
       offsetX = 0;
       offsetY = (rect.height - drawHeight) / 2;
+    } else {
+      // Image is taller than canvas - fit to height
+      drawHeight = rect.height;
+      drawWidth = drawHeight * imgAspect;
+      offsetX = (rect.width - drawWidth) / 2;
+      offsetY = 0;
     }
 
     ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
